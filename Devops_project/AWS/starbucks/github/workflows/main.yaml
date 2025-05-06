@@ -1,0 +1,87 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  ci-pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Clean workspace
+      - name: Clean workspace
+        run: |
+          rm -rf *
+
+      # Git checkout
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          repository: yeshwanthlm/starbucks
+          ref: main
+
+      # SonarQube Analysis
+      - name: SonarQube Analysis
+        env:
+          SCANNER_HOME: ${{ secrets.SONAR_SCANNER_HOME }}
+        run: |
+          $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=starbucks \
+          -Dsonar.projectKey=starbucks
+
+      # Quality Gate
+      - name: Wait for Quality Gate
+        uses: sonarsource/sonarcloud-github-action@v1
+        with:
+          projectKey: starbucks
+          organization: your-org
+          token: ${{ secrets.SONAR_TOKEN }}
+
+      # Install NPM Dependencies
+      - name: Install NPM Dependencies
+        run: npm install
+
+      # OWASP Dependency Check
+      - name: OWASP Dependency Check
+        run: |
+          dependency-check --scan ./ --disableYarnAudit --disableNodeAudit
+          dependency-check-publisher --pattern '**/dependency-check-report.xml'
+
+      # Trivy File Scan
+      - name: Trivy File Scan
+        run: trivy fs . > trivy.txt
+
+      # Build Docker Image
+      - name: Build Docker Image
+        run: docker build -t starbucks .
+
+      # Tag & Push to DockerHub
+      - name: Tag & Push Docker Image
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+          docker tag starbucks sandhya0593/starbucks:latest
+          docker push sandhya0593/starbucks:latest
+
+      # Docker Scout Image
+      - name: Docker Scout Analysis
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+          docker scout quickview sandhya0593/starbucks:latest
+          docker scout cves sandhya0593/starbucks:latest
+          docker scout recommendations sandhya0593/starbucks:latest
+
+
+
+      # Update Kubernetes Deployment YAML
+      - name: Update Kubernetes Deployment
+        run: |
+          sed -i 's|image: .*|image: sandhya0593/starbucks:latest|' k8s/deployment.yaml 
+     
