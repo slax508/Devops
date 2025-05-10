@@ -69,7 +69,7 @@ function App() {
   // Reset the game
   const resetGame = () => {
     setBoard(Array(9).fill(null));
-    setXIsNext(true);
+    setXIsNext(true); 
     setGameStatus('playing');
     setWinningLine(null);
   };
