@@ -1,38 +1,79 @@
+# This GitHub Actions workflow is designed for a Node.js application.
+# It performs the following tasks on every commit:
+# 1. Runs unit tests.
+# 2. Performs SonarQube scanning.
+# 3. Builds a Docker image.
+# 4. Scans the Docker image for vulnerabilities using Trivy.
+# 5. Pushes the Docker image to a Docker registry.
+
 name: CI Pipeline
 
 on:
   push:
     branches:
-      - main
-  pull_request:
+      - '**' # Triggers on every branch commit.
 
 jobs:
-  ci-process:
-    name: CI Process
+  unit-test:
+    name: Run Unit Tests
     runs-on: ubuntu-latest
-
     steps:
-      # Step 1: Checkout the repository
-      - name: Checkout Repository
+      - name: Checkout Code
         uses: actions/checkout@v3
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
 
-      # Step 4: Build Docker Image
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Run Tests
+        run: npm test
+
+  sonar-scan:
+    name: SonarQube Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: SonarQube Scan
+        env:
+          SONAR_HOST_URL: "http://localhost:9000"
+          SONAR_TOKEN: "squ_417d8d52e6952330fc8be2f3d0bbc7b195da7038" # Replace with your SonarQube token
+        run: |
+          npm install -g sonar-scanner
+          sonar-scanner \
+            -Dsonar.projectKey=your-project-key \
+            -Dsonar.organization=your-organization \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=$SONAR_HOST_URL \
+            -Dsonar.login=$SONAR_TOKEN
+
+  build-and-push-docker:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: [unit-test, sonar-scan]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: "sandhya0593"# Replace with your DockerHub username
+          password: "HDFC@1998lax"# Replace with your DockerHub password
+
       - name: Build Docker Image
         run: |
-          docker build -t sandhya0593/netflix:latest .
+          docker build -t sandhya0593/netflix05:latest .
 
-      # Step 5: Run Trivy Scan
-      - name: Run Trivy Scan
+      - name: Scan Docker Image with Trivy
         uses: aquasecurity/trivy-action@v0.11.0
         with:
-          image-ref: sandhya0593/netflix:latest
-
-     
-
-      # Step 6: Push Docker Image to Docker Repository
-      - name: Push Docker Image 
+          image-ref: sandhya0593/netflix05:latest
+      - name: Push Docker Image
         run: |
-          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-          docker tag your-docker-image:latest sandhya0593/netflix:latest
-          docker push sandhya0593/netflix:latest
+          docker push sandhya0593/netflix05:latest
